@@ -1,0 +1,77 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: poc-ai-gateway
+  ai:
+    mcp:
+      server:
+        # MCP server towards external AI clients.
+        name: ai-gateway
+        version: 0.0.1
+        type: SYNC
+        protocol: STATELESS
+        streamable-http:
+          mcp-endpoint: /mcp
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+
+# Gateway registry. POC: seeded from here and kept in memory, changeable at runtime through /admin.
+# Target: DB-backed, upstreams discovered by Kubernetes labels.
+ai-gateway:
+  # Global kill switch. AI_GATEWAY_ENABLED=false turns off all AI traffic.
+  enabled: ${AI_GATEWAY_ENABLED:true}
+  # How often upstream tools/list is read. New tools show up as DISCOVERED (disabled).
+  discovery-interval: 30s
+  # Per-call timeout towards upstream MCP servers.
+  upstream-timeout: 60s
+  # HTTP edge (Spring Cloud Gateway route on /mcp). MCP-agnostic: every HTTP request counts.
+  edge:
+    rate-limit:
+      # Requests per period, per client+user.
+      capacity: ${AI_GATEWAY_RATE_LIMIT:60}
+      period: 1m
+    max-request-size: 1MB
+  upstreams:
+    task-service:
+      url: http://localhost:8081
+      endpoint: /mcp
+      # Prefix for public tool names: <domain>_<tool>
+      domain: tasks
+    car-brand-service:
+      url: http://localhost:8082
+      endpoint: /mcp
+      domain: cars
+  clients:
+    chat-assistant: true
+    ide-agent: true
+    legacy-bot: false
+  # Tools approved up front. Every other discovered tool starts as DISCOVERED and must be enabled via /admin.
+  tools:
+    - upstream: task-service
+      internal-name: create_task
+      enabled: true
+      # Write tool: only explicitly granted clients may call it. Empty list = every enabled client.
+      clients: [ chat-assistant ]
+      description: "Create a task for the current user. Ask the user to confirm before calling."
+    - upstream: task-service
+      internal-name: list_tasks
+      enabled: true
+    - upstream: car-brand-service
+      internal-name: add_car_brand
+      enabled: true
+      clients: [ chat-assistant ]
+    - upstream: car-brand-service
+      internal-name: list_car_brands
+      enabled: true
+    # remove_car_brand is not listed: it shows up as DISCOVERED and stays hidden until enabled via /admin.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,0 +1,23 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: poc-car-brand-service
+  ai:
+    mcp:
+      server:
+        name: car-brand-service
+        version: 0.0.1
+        # SYNC: tools run on the servlet request thread, so the SecurityContext is available inside tools.
+        type: SYNC
+        # STATELESS: no MCP session, any replica can serve any request (no sticky sessions).
+        protocol: STATELESS
+        streamable-http:
+          mcp-endpoint: /mcp
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
