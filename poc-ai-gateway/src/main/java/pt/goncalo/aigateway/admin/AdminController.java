@@ -93,15 +93,29 @@ class AdminController {
 
 	/**
 	 * Admin view of a tool.
+	 *
+	 * @param id registry key ({@code upstream/internalName})
+	 * @param upstream upstream id
+	 * @param internalName tool name on the upstream
+	 * @param publicName tool name shown to AI clients
+	 * @param status exposure status
+	 * @param clients granted clients, empty = every enabled client
+	 * @param description description shown to AI clients
+	 * @param upstreamDescription description from the upstream
+	 * @param descriptionOverride gateway override, {@code null} = upstream description is used
+	 * @param readOnly upstream {@code readOnlyHint}
+	 * @param destructive upstream {@code destructiveHint}
 	 */
-	record ToolView(String id, String publicName, ToolStatus status, List<String> clients, String description,
+	record ToolView(String id, String upstream, String internalName, String publicName, ToolStatus status,
+			List<String> clients, String description, String upstreamDescription, String descriptionOverride,
 			Boolean readOnly, Boolean destructive) {
 
 		static ToolView of(RegisteredTool tool) {
 			var definition = tool.publicDefinition();
 			var annotations = definition.annotations();
-			return new ToolView(tool.id(), tool.publicName(), tool.status(), tool.clients(), definition.description(),
-					annotations != null ? annotations.readOnlyHint() : null,
+			return new ToolView(tool.id(), tool.upstreamId(), tool.internalName(), tool.publicName(), tool.status(),
+					tool.clients(), definition.description(), tool.definition().description(),
+					tool.descriptionOverride(), annotations != null ? annotations.readOnlyHint() : null,
 					annotations != null ? annotations.destructiveHint() : null);
 		}
 

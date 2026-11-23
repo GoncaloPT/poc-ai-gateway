@@ -1,6 +1,6 @@
 # AI Gateway POC
 
-Three Spring Boot projects that show how to put a governing **AI gateway** in front of MCP tools offered by
+Three Spring Boot projects and an Angular admin app that show how to put a governing **AI gateway** in front of MCP tools offered by
 microservices.
 
 ```
@@ -28,6 +28,7 @@ AI client ──POST /mcp──►┌──────────────�
 |---|---|---|
 | `poc-mcp-tool-service` | Spring Boot 4.2, Spring AI 2.1 MCP server (stateless Streamable HTTP) | Sample microservice. One `TaskService` (in-memory store) exposed via a REST controller (`POST`/`GET`/`DELETE /api/tasks`) and via `@McpTool` methods (`create_task`, `list_tasks`, `delete_task`). |
 | `poc-car-brand-service` | Same stack as `poc-mcp-tool-service` | Second sample microservice, so the gateway merges tools of several upstreams. `CarBrandService` (in-memory, unique by name) via REST (`POST`/`GET /api/car-brands`, `DELETE /api/car-brands/{name}`) and `@McpTool` methods (`add_car_brand`, `list_car_brands`, `remove_car_brand`). Public names get the `cars_` prefix. |
+| `poc-ai-gateway-app` | Angular 22 (standalone, signals, zoneless) | Admin UI for the gateway's `/admin` API. **Tools**: filter by status/upstream/text, enable/disable, edit client grants and description override, review discovered tools. **Clients**: enable/disable, register new ones, see which tools each can use. Dev server proxies `/admin` to `:8080`. |
 | `poc-ai-gateway` | Spring Boot 4.2, Spring Cloud Gateway Server MVC 5.1 (Spring Cloud 2026.0), Spring AI 2.1 MCP server outward, MCP Java SDK 2.2 client inward | Single public `/mcp` endpoint. Aggregates the tools of all upstreams, decides which ones each AI client sees and may call, and audits every call. |
 
 ## Why Spring Cloud Gateway + MCP server + MCP client
@@ -81,19 +82,21 @@ loop.
 
 ## Run
 
-Requires Java 25.
+Requires Java 25 and Node (for the admin UI).
 
 ```bash
 ./run.sh
 ```
 
-Starts both tool services, waits until they are up, then starts the gateway. Logs go to `logs/`; Ctrl+C stops all.
+Starts both tool services, waits until they are up, then starts the gateway and the admin UI
+(http://localhost:4200, needs Node). Logs go to `logs/`; Ctrl+C stops all.
 Or start them one by one:
 
 ```bash
 (cd poc-mcp-tool-service && ./mvnw spring-boot:run)
 (cd poc-car-brand-service && ./mvnw spring-boot:run)
 (cd poc-ai-gateway && ./mvnw spring-boot:run)
+(cd poc-ai-gateway-app && npm ci && npx ng serve)
 ```
 
 
@@ -141,14 +144,14 @@ mcp ide-agent '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"t
 mcp ide-agent '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"tasks_list_tasks","arguments":{}}}'
 
 # tools of the second upstream, merged into the same tools/list
-mcp chat-assistant '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"cars_add_car_brand","arguments":{"name":"BMW","country":"Germany"}}}'
+mcp chat-assistant '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"cars_add_car_brand","arguments":{"name":"Toyota","country":"Japan"}}}'
 mcp ide-agent '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"cars_list_car_brands","arguments":{}}}'
 
 # disabled client: 403
 mcp legacy-bot '{"jsonrpc":"2.0","id":7,"method":"tools/list"}'
 ```
 
-Admin API:
+Admin UI at http://localhost:4200 (`poc-ai-gateway-app`), or the admin API directly:
 
 ```bash
 # all tools incl. the discovered, hidden delete_task and remove_car_brand

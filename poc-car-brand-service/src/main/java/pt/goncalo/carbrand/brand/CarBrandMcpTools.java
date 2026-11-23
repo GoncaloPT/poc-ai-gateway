@@ -26,8 +26,8 @@ class CarBrandMcpTools {
 	@McpTool(name = "add_car_brand",
 			description = "Add a car brand to the list. Fails if a brand with the same name already exists.",
 			annotations = @McpAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false))
-	public CarBrand addCarBrand(@McpToolParam(description = "Brand name, e.g. BMW") String name,
-			@McpToolParam(description = "Country of origin, e.g. Germany") String country) {
+	public CarBrand addCarBrand(@McpToolParam(description = "Brand name, e.g. Toyota") String name,
+			@McpToolParam(description = "Country of origin, e.g. Japan") String country) {
 		return carBrandService.addBrand(new CarBrand(name, country));
 	}
 

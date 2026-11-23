@@ -12,20 +12,20 @@ class CarBrandServiceTest {
 	@Test
 	void addedBrandsAreListedByNameAndRemovable() {
 		var volvo = carBrandService.addBrand(new CarBrand(" Volvo ", "Sweden"));
-		var bmw = carBrandService.addBrand(new CarBrand("BMW", "Germany"));
+		var toyota = carBrandService.addBrand(new CarBrand("Toyota", "Japan"));
 
 		assertThat(volvo).isEqualTo(new CarBrand("Volvo", "Sweden"));
-		assertThat(carBrandService.listBrands()).containsExactly(bmw, volvo);
+		assertThat(carBrandService.listBrands()).containsExactly(toyota, volvo);
 
-		assertThat(carBrandService.removeBrand("bmw")).isEqualTo(bmw);
+		assertThat(carBrandService.removeBrand("toyota")).isEqualTo(toyota);
 		assertThat(carBrandService.listBrands()).containsExactly(volvo);
 	}
 
 	@Test
 	void addingDuplicateNameFails() {
-		carBrandService.addBrand(new CarBrand("BMW", "Germany"));
+		carBrandService.addBrand(new CarBrand("Toyota", "Japan"));
 
-		assertThatThrownBy(() -> carBrandService.addBrand(new CarBrand("bmw", "Germany")))
+		assertThatThrownBy(() -> carBrandService.addBrand(new CarBrand("toyota", "Japan")))
 			.isInstanceOf(CarBrandAlreadyExistsException.class);
 	}
 

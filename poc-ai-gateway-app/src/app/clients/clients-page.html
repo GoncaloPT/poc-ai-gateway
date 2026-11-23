@@ -1,0 +1,60 @@
+<section class="page">
+  <header class="page-header">
+    <div>
+      <h2>AI clients</h2>
+      <p class="hint">Only enabled clients reach the MCP endpoint. A disabled client gets <code>403</code> on its next request.</p>
+    </div>
+  </header>
+
+  @if (error(); as message) {
+    <p class="alert" role="alert">{{ message }}</p>
+  }
+  @if (api.clients.error()) {
+    <p class="alert" role="alert">Could not load clients. Is the gateway running on :8080?</p>
+  }
+
+  <table>
+    <thead>
+      <tr>
+        <th>Client</th>
+        <th>Status</th>
+        <th>Tools it can use</th>
+        <th class="actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr [class.muted]="!row.enabled">
+          <td><code>{{ row.id }}</code></td>
+          <td>
+            <span [class]="row.enabled ? 'badge ok' : 'badge off'">
+              {{ row.enabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </td>
+          <td>
+            @for (tool of row.tools; track tool) {
+              <span class="chip">{{ tool }}</span>
+            } @empty {
+              <span class="hint">none</span>
+            }
+          </td>
+          <td class="actions">
+            <button type="button" [class]="row.enabled ? 'danger' : 'primary'" [disabled]="busy() === row.id"
+              (click)="toggle(row)">
+              {{ row.enabled ? 'Disable' : 'Enable' }}
+            </button>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="4" class="hint">No clients.</td></tr>
+      }
+    </tbody>
+  </table>
+
+  <form class="inline-form" (submit)="$event.preventDefault(); add()">
+    <label for="new-client">Register client</label>
+    <input id="new-client" placeholder="client id, e.g. my-agent" [value]="newClientId()"
+      (input)="newClientId.set($any($event.target).value)" />
+    <button type="submit" class="primary" [disabled]="!canAdd() || busy() !== null">Add</button>
+  </form>
+</section>

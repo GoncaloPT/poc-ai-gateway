@@ -1,0 +1,14 @@
+<header class="topbar">
+  <h1>AI Gateway admin</h1>
+  <nav>
+    <a routerLink="/tools" routerLinkActive="active">Tools</a>
+    <a routerLink="/clients" routerLinkActive="active">Clients</a>
+  </nav>
+  <button type="button" class="refresh" [disabled]="api.tools.isLoading() || api.clients.isLoading()"
+    (click)="api.reload()">
+    Refresh
+  </button>
+</header>
+<main>
+  <router-outlet />
+</main>

@@ -1,0 +1,101 @@
+<section class="page">
+  <header class="page-header">
+    <div>
+      <h2>Tools</h2>
+      <p class="hint">
+        Deny by default: tools found on upstreams start as <em>Discovered</em> and stay hidden until enabled.
+        Clients see changes on their next <code>tools/list</code>.
+      </p>
+    </div>
+    @if (discoveredCount() > 0) {
+      <button type="button" class="link" (click)="statusFilter.set('DISCOVERED')">
+        {{ discoveredCount() }} awaiting review
+      </button>
+    }
+  </header>
+
+  @if (error(); as message) {
+    <p class="alert" role="alert">{{ message }}</p>
+  }
+  @if (api.tools.error()) {
+    <p class="alert" role="alert">Could not load tools. Is the gateway running on :8080?</p>
+  }
+
+  <div class="filters">
+    <input type="search" placeholder="Search name or description" aria-label="Search" [value]="search()"
+      (input)="search.set($any($event.target).value)" />
+    <select aria-label="Status" (change)="statusFilter.set($any($event.target).value)">
+      <option value="" [selected]="statusFilter() === ''">All statuses</option>
+      <option value="ENABLED" [selected]="statusFilter() === 'ENABLED'">Enabled</option>
+      <option value="DISABLED" [selected]="statusFilter() === 'DISABLED'">Disabled</option>
+      <option value="DISCOVERED" [selected]="statusFilter() === 'DISCOVERED'">Discovered</option>
+    </select>
+    <select aria-label="Upstream" (change)="upstreamFilter.set($any($event.target).value)">
+      <option value="">All upstreams</option>
+      @for (upstream of upstreams(); track upstream) {
+        <option [value]="upstream" [selected]="upstreamFilter() === upstream">{{ upstream }}</option>
+      }
+    </select>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Public name</th>
+        <th>Upstream</th>
+        <th>Status</th>
+        <th>Kind</th>
+        <th>Clients</th>
+        <th>Description</th>
+        <th class="actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (tool of visibleTools(); track tool.id) {
+        <tr [class.muted]="tool.status !== 'ENABLED'">
+          <td><code>{{ tool.publicName }}</code></td>
+          <td>{{ tool.upstream }}<br /><span class="hint">{{ tool.internalName }}</span></td>
+          <td><span [class]="'badge ' + tool.status.toLowerCase()">{{ statusLabel(tool.status) }}</span></td>
+          <td>
+            @if (tool.readOnly) {
+              <span class="chip">read</span>
+            } @else {
+              <span class="chip write">write</span>
+            }
+            @if (tool.destructive) {
+              <span class="chip destructive">destructive</span>
+            }
+          </td>
+          <td>
+            @for (client of tool.clients; track client) {
+              <span class="chip">{{ client }}</span>
+            } @empty {
+              <span class="hint">all enabled</span>
+            }
+          </td>
+          <td class="description">
+            {{ tool.description }}
+            @if (tool.descriptionOverride !== null) {
+              <span class="hint">(override)</span>
+            }
+          </td>
+          <td class="actions">
+            <button type="button" [class]="tool.status === 'ENABLED' ? 'danger' : 'primary'"
+              [disabled]="busy() === tool.id" (click)="toggle(tool)">
+              {{ tool.status === 'ENABLED' ? 'Disable' : 'Enable' }}
+            </button>
+            <button type="button" [disabled]="busy() === tool.id" (click)="editing.set(tool.id)">Edit</button>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="7" class="hint">No tools match.</td></tr>
+      }
+    </tbody>
+  </table>
+
+  @for (tool of editedTool() ? [editedTool()!] : []; track tool.id) {
+    <!-- @for with track recreates the editor when another tool is selected, so its draft starts fresh -->
+    <app-tool-editor [tool]="tool" [clientIds]="clientIds()" [busy]="busy() === tool.id" (saved)="save(tool, $event)"
+      (cancelled)="editing.set(null)" />
+  }
+</section>
