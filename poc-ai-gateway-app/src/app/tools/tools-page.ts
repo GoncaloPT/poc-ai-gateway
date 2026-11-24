@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AdminApi } from '../admin/admin-api';
-import { AdminTool, ToolStatus, ToolUpdate, currentRules } from '../admin/admin.models';
+import { AdminTool, ToolStatus, ToolUpdate, currentRules, needsGrant } from '../admin/admin.models';
 import { errorMessage } from '../admin/error-message';
 import { ToolEditor } from './tool-editor';
 
@@ -51,8 +51,15 @@ export class ToolsPage {
 
   protected readonly editedTool = computed(() => this.api.tools.value().find((tool) => tool.id === this.editing()));
 
-  /** Enables a disabled or discovered tool, or disables an enabled one, keeping grants and description. */
+  /**
+   * Enables a disabled or discovered tool, or disables an enabled one, keeping grants and description. Write tools
+   * without grants open the editor instead, since the gateway rejects enabling them.
+   */
   protected toggle(tool: AdminTool): void {
+    if (tool.status !== 'ENABLED' && needsGrant(tool)) {
+      this.editing.set(tool.id);
+      return;
+    }
     this.save(tool, { ...currentRules(tool), status: tool.status === 'ENABLED' ? 'DISABLED' : 'ENABLED' });
   }
 

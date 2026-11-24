@@ -37,10 +37,10 @@ describe('AdminApi', () => {
 
   it('puts tool rules on upstream and internal name', () => {
     const tool = { upstream: 'car-brand-service', internalName: 'remove_car_brand' } as AdminTool;
-    api.updateTool(tool, { status: 'ENABLED', clients: ['chat'], description: null }).subscribe();
+    api.updateTool(tool, { publicName: 'x_list', status: 'ENABLED', clients: ['chat'], description: null }).subscribe();
 
     const req = http.expectOne('/admin/tools/car-brand-service/remove_car_brand');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ status: 'ENABLED', clients: ['chat'], description: null });
+    expect(req.request.body).toEqual({ publicName: 'x_list', status: 'ENABLED', clients: ['chat'], description: null });
   });
 });

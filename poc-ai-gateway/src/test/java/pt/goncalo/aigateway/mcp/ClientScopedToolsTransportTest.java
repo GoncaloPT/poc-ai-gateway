@@ -35,7 +35,7 @@ class ClientScopedToolsTransportTest {
 						new AiGatewayProperties.ToolSeed("svc", "list_tasks", "tasks_list", true, List.of(), null)));
 		var registry = new ToolRegistry(properties, event -> {
 		});
-		registry.syncUpstream("svc", List.of(tool("create_task"), tool("list_tasks")));
+		registry.syncUpstream("svc", List.of(tool("create_task"), readOnlyTool("list_tasks")));
 
 		var transport = new ClientScopedToolsTransport(new CapturingTransport(), registry, new AuditLogger());
 		transport.setMcpHandler(new FakeServerHandler());
@@ -75,6 +75,11 @@ class ClientScopedToolsTransportTest {
 
 	private static McpTransportContext context(String clientId) {
 		return new Caller(clientId, "alice", null).toTransportContext();
+	}
+
+	private static McpSchema.Tool readOnlyTool(String name) {
+		return new McpSchema.Tool(name, null, null, Map.of("type", "object"), null,
+				new McpSchema.ToolAnnotations(null, true, false, true, false, null), null, null);
 	}
 
 	private static McpSchema.Tool tool(String name) {

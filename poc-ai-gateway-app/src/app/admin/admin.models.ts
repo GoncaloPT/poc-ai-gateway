@@ -26,8 +26,10 @@ export interface AdminTool {
 
 /** Body of {@code PUT /admin/tools/{upstream}/{internalName}}. */
 export interface ToolUpdate {
+  /** Name shown to AI clients. 1-128 of A-Z, a-z, 0-9, '_', '-', '.'. */
+  publicName: string;
   status: ToolStatus;
-  /** Empty = every enabled client. */
+  /** Empty = every enabled client. Rejected by the gateway for enabled write tools. */
   clients: string[];
   /** Null = upstream description. */
   description: string | null;
@@ -44,8 +46,24 @@ export function isGranted(tool: AdminTool, clientId: string): boolean {
 
 /**
  * @param tool registry tool
+ * @returns true if the tool can only be enabled after granting at least one client (write tool without grants)
+ */
+export function needsGrant(tool: Pick<AdminTool, 'readOnly' | 'clients'>): boolean {
+  return tool.readOnly !== true && tool.clients.length === 0;
+}
+
+/**
+ * @param tool registry tool
  * @returns the update that keeps the tool's current rules
  */
 export function currentRules(tool: AdminTool): ToolUpdate {
-  return { status: tool.status, clients: [...tool.clients], description: tool.descriptionOverride };
+  return {
+    publicName: tool.publicName,
+    status: tool.status,
+    clients: [...tool.clients],
+    description: tool.descriptionOverride,
+  };
 }
+
+/** MCP tool name rules, same check as the gateway. */
+export const PUBLIC_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;

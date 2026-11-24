@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ToolRegistryTest {
 
@@ -42,8 +43,8 @@ class ToolRegistryTest {
 
 	@Test
 	void grantRestrictsClientsAndEmptyGrantAllowsAll() {
-		registry.syncUpstream("svc", List.of(tool("create_task"), tool("list_tasks")));
-		registry.updateTool("svc/list_tasks", ToolStatus.ENABLED, List.of(), null);
+		registry.syncUpstream("svc", List.of(tool("create_task"), readOnlyTool("list_tasks")));
+		registry.updateTool("svc/list_tasks", null, ToolStatus.ENABLED, List.of(), null);
 
 		assertThat(registry.findByPublicName("tasks_create").orElseThrow().isCallableBy("ide")).isFalse();
 		assertThat(registry.findByPublicName("tasks_create").orElseThrow().isCallableBy("chat")).isTrue();
@@ -52,11 +53,11 @@ class ToolRegistryTest {
 
 	@Test
 	void vanishedToolIsRemovedAndRulesSurviveDefinitionChange() {
-		registry.syncUpstream("svc", List.of(tool("create_task"), tool("list_tasks")));
-		registry.updateTool("svc/list_tasks", ToolStatus.ENABLED, List.of(), "custom");
+		registry.syncUpstream("svc", List.of(tool("create_task"), readOnlyTool("list_tasks")));
+		registry.updateTool("svc/list_tasks", null, ToolStatus.ENABLED, List.of(), "custom");
 
 		registry.syncUpstream("svc", List.of(new McpSchema.Tool("list_tasks", null, "changed upstream",
-				Map.of("type", "object"), null, null, null, null)));
+				Map.of("type", "object"), null, READ_ONLY, null, null)));
 
 		assertThat(registry.findByPublicName("tasks_create")).isEmpty();
 		var list = registry.findByPublicName("tasks_list_tasks").orElseThrow();
@@ -75,6 +76,52 @@ class ToolRegistryTest {
 		registry.setClientEnabled("chat", false);
 
 		assertThat(registry.isClientEnabled("chat")).isFalse();
+	}
+
+	@Test
+	void writeToolNeedsExplicitGrant() {
+		registry.syncUpstream("svc", List.of(tool("delete_task"), readOnlyTool("list_tasks")));
+
+		assertThatThrownBy(() -> registry.updateTool("svc/delete_task", null, ToolStatus.ENABLED, List.of(), null))
+			.isInstanceOf(InvalidToolRulesException.class);
+		assertThat(registry.updateTool("svc/delete_task", null, ToolStatus.DISABLED, List.of(), null)).isPresent();
+		assertThat(registry.updateTool("svc/delete_task", null, ToolStatus.ENABLED, List.of("chat"), null))
+			.hasValueSatisfying(tool -> assertThat(tool.isCallableBy("chat")).isTrue());
+	}
+
+	@Test
+	void openToolTurningIntoWriteToolIsDisabled() {
+		registry.syncUpstream("svc", List.of(readOnlyTool("list_tasks")));
+		registry.updateTool("svc/list_tasks", null, ToolStatus.ENABLED, List.of(), null);
+
+		registry.syncUpstream("svc", List.of(tool("list_tasks")));
+
+		assertThat(registry.findByPublicName("tasks_list_tasks").orElseThrow().status())
+			.isEqualTo(ToolStatus.DISABLED);
+	}
+
+	@Test
+	void publicNameCanBeChangedButMustBeValidAndUnique() {
+		registry.syncUpstream("svc", List.of(tool("create_task"), readOnlyTool("list_tasks")));
+
+		registry.updateTool("svc/list_tasks", "tasks_list", ToolStatus.ENABLED, List.of(), null);
+
+		assertThat(registry.findByPublicName("tasks_list")).isPresent();
+		assertThat(registry.findByPublicName("tasks_list_tasks")).isEmpty();
+		assertThatThrownBy(() -> registry.updateTool("svc/list_tasks", "tasks_create", ToolStatus.ENABLED,
+				List.of(), null))
+			.isInstanceOf(PublicNameTakenException.class);
+		assertThatThrownBy(() -> registry.updateTool("svc/list_tasks", "bad name!", ToolStatus.ENABLED,
+				List.of(), null))
+			.isInstanceOf(InvalidToolRulesException.class);
+	}
+
+	private static final McpSchema.ToolAnnotations READ_ONLY = new McpSchema.ToolAnnotations(null, true, false,
+			true, false, null);
+
+	private static McpSchema.Tool readOnlyTool(String name) {
+		return new McpSchema.Tool(name, null, name + " description", Map.of("type", "object"), null, READ_ONLY, null,
+				null);
 	}
 
 	private static McpSchema.Tool tool(String name) {

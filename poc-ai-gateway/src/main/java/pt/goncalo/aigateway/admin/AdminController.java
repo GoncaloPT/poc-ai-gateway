@@ -6,13 +6,18 @@ import java.util.Map;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import pt.goncalo.aigateway.registry.InvalidToolRulesException;
+import pt.goncalo.aigateway.registry.PublicNameTakenException;
 import pt.goncalo.aigateway.registry.RegisteredTool;
 import pt.goncalo.aigateway.registry.ToolRegistry;
 import pt.goncalo.aigateway.registry.ToolStatus;
@@ -59,22 +64,33 @@ class AdminController {
 	}
 
 	/**
-	 * Changes status, client grants and description of a tool.
+	 * Changes public name, status, client grants and description of a tool.
 	 *
 	 * @param upstream upstream id
 	 * @param internalName tool name on the upstream
 	 * @param update new rules
-	 * @return updated tool, {@code 404} if unknown
+	 * @return updated tool, {@code 404} if unknown, {@code 400} if a rule is broken, {@code 409} if the public name is
+	 * taken
 	 */
 	@PutMapping("/tools/{upstream}/{internalName}")
 	ResponseEntity<ToolView> updateTool(@PathVariable String upstream, @PathVariable String internalName,
 			@Valid @RequestBody ToolUpdate update) {
 		return registry
-			.updateTool(upstream + "/" + internalName, update.status(),
+			.updateTool(upstream + "/" + internalName, update.publicName(), update.status(),
 					update.clients() != null ? update.clients() : List.of(), update.description())
 			.map(ToolView::of)
 			.map(ResponseEntity::ok)
 			.orElse(ResponseEntity.notFound().build());
+	}
+
+	@ExceptionHandler(InvalidToolRulesException.class)
+	ProblemDetail invalidRules(InvalidToolRulesException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	@ExceptionHandler(PublicNameTakenException.class)
+	ProblemDetail publicNameTaken(PublicNameTakenException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 
 	/**
@@ -84,11 +100,12 @@ class AdminController {
 	}
 
 	/**
+	 * @param publicName new public name, {@code null} = keep the current one
 	 * @param status new status
-	 * @param clients granted clients, empty or {@code null} = every enabled client
+	 * @param clients granted clients, empty or {@code null} = every enabled client (read-only tools only)
 	 * @param description description override, {@code null} = upstream description
 	 */
-	record ToolUpdate(@NotNull ToolStatus status, List<String> clients, String description) {
+	record ToolUpdate(String publicName, @NotNull ToolStatus status, List<String> clients, String description) {
 	}
 
 	/**

@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, input, output, signal } from '@angular/core';
-import { AdminTool, ToolStatus, ToolUpdate } from '../admin/admin.models';
+import { AdminTool, PUBLIC_NAME_PATTERN, ToolStatus, ToolUpdate } from '../admin/admin.models';
 
 /**
- * Edits the exposure rules of one tool: status, granted clients and description override.
+ * Edits the exposure rules of one tool: public name, status, granted clients and description override.
  */
 @Component({
   selector: 'app-tool-editor',
@@ -21,20 +21,29 @@ export class ToolEditor implements OnInit {
 
   protected readonly statuses: ToolStatus[] = ['ENABLED', 'DISABLED'];
 
+  protected readonly publicName = signal('');
   protected readonly status = signal<ToolStatus>('ENABLED');
   protected readonly grants = signal<string[]>([]);
   protected readonly overrideDescription = signal(false);
   protected readonly description = signal('');
 
-  /** Write tools open to every client contradict the "write tools need an explicit grant" rule. */
+  /** Write tools need an explicit grant; the gateway rejects an enabled write tool open to every client. */
   protected readonly openWriteTool = computed(
     () => this.status() === 'ENABLED' && this.tool().readOnly !== true && this.grants().length === 0,
   );
 
-  protected readonly valid = computed(() => !this.overrideDescription() || this.description().trim().length > 0);
+  protected readonly publicNameValid = computed(() => PUBLIC_NAME_PATTERN.test(this.publicName().trim()));
+
+  protected readonly valid = computed(
+    () =>
+      this.publicNameValid() &&
+      !this.openWriteTool() &&
+      (!this.overrideDescription() || this.description().trim().length > 0),
+  );
 
   ngOnInit(): void {
     const tool = this.tool();
+    this.publicName.set(tool.publicName);
     this.status.set(tool.status === 'DISCOVERED' ? 'ENABLED' : tool.status);
     this.grants.set([...tool.clients]);
     this.overrideDescription.set(tool.descriptionOverride !== null);
@@ -50,6 +59,7 @@ export class ToolEditor implements OnInit {
   protected save(): void {
     if (this.valid()) {
       this.saved.emit({
+        publicName: this.publicName().trim(),
         status: this.status(),
         clients: this.grants(),
         description: this.overrideDescription() ? this.description().trim() : null,

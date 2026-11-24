@@ -12,7 +12,7 @@ import io.modelcontextprotocol.spec.McpSchema;
  * @param internalName tool name on the upstream
  * @param publicName tool name shown to AI clients
  * @param status exposure status
- * @param clients granted clients, empty = every enabled client
+ * @param clients granted clients, empty = every enabled client (allowed for read-only tools only)
  * @param descriptionOverride description shown to AI clients, {@code null} = upstream description
  * @param definition last tool definition read from the upstream
  */
@@ -42,6 +42,21 @@ public record RegisteredTool(String upstreamId, String internalName, String publ
 	}
 
 	/**
+	 * @return {@code true} only if the upstream declares {@code readOnlyHint=true}; a missing hint counts as write
+	 */
+	public boolean isReadOnly() {
+		var annotations = definition.annotations();
+		return annotations != null && Boolean.TRUE.equals(annotations.readOnlyHint());
+	}
+
+	/**
+	 * @return {@code true} if this is an enabled write tool open to every client, which the registry forbids
+	 */
+	boolean isOpenWriteTool() {
+		return isEnabled() && !isReadOnly() && clients.isEmpty();
+	}
+
+	/**
 	 * Tool definition as shown to AI clients: public name and description, upstream schemas and hints unchanged.
 	 *
 	 * @return public tool definition
@@ -57,9 +72,15 @@ public record RegisteredTool(String upstreamId, String internalName, String publ
 				newDefinition);
 	}
 
-	RegisteredTool withRules(ToolStatus newStatus, List<String> newClients, String newDescription) {
-		return new RegisteredTool(upstreamId, internalName, publicName, newStatus, List.copyOf(newClients),
+	RegisteredTool withRules(String newPublicName, ToolStatus newStatus, List<String> newClients,
+			String newDescription) {
+		return new RegisteredTool(upstreamId, internalName, newPublicName, newStatus, List.copyOf(newClients),
 				newDescription, definition);
+	}
+
+	RegisteredTool withStatus(ToolStatus newStatus) {
+		return new RegisteredTool(upstreamId, internalName, publicName, newStatus, clients, descriptionOverride,
+				definition);
 	}
 
 	static String key(String upstreamId, String internalName) {

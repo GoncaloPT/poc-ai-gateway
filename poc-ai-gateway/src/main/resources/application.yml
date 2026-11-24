@@ -55,7 +55,7 @@ ai-gateway:
     - upstream: task-service
       internal-name: create_task
       enabled: true
-      # Write tool: only explicitly granted clients may call it. Empty list = every enabled client.
+      # Write tool: needs explicit clients. Empty list = every enabled client, allowed for read-only tools only.
       clients: [ chat-assistant ]
       description: "Create a task for the current user. Ask the user to confirm before calling."
     - upstream: task-service

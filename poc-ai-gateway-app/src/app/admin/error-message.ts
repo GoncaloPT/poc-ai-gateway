@@ -6,9 +6,11 @@ import { HttpErrorResponse } from '@angular/common/http';
  */
 export function errorMessage(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
-    return error.status === 0
-      ? 'AI gateway not reachable. Is it running on :8080?'
-      : `Request failed: ${error.status} ${error.statusText}`;
+    if (error.status === 0) {
+      return 'AI gateway not reachable. Is it running on :8080?';
+    }
+    const detail = (error.error as { detail?: unknown } | null)?.detail;
+    return typeof detail === 'string' ? detail : `Request failed: ${error.status} ${error.statusText}`;
   }
   return 'Unexpected error';
 }

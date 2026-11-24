@@ -3,6 +3,15 @@
   <p class="hint">Upstream <code>{{ tool().upstream }}</code>, internal name <code>{{ tool().internalName }}</code></p>
 
   <fieldset>
+    <legend>Public name</legend>
+    <p class="hint">Name AI clients see. Renaming breaks clients that use the old name.</p>
+    <input type="text" name="publicName" [value]="publicName()" (input)="publicName.set($any($event.target).value)" />
+    @if (!publicNameValid()) {
+      <p class="warning">1-128 characters of A-Z, a-z, 0-9, '_', '-' or '.'.</p>
+    }
+  </fieldset>
+
+  <fieldset>
     <legend>Status</legend>
     @for (option of statuses; track option) {
       <label class="radio">
@@ -15,7 +24,7 @@
 
   <fieldset>
     <legend>Granted clients</legend>
-    <p class="hint">None selected = every enabled client.</p>
+    <p class="hint">None selected = every enabled client (read-only tools only).</p>
     @for (clientId of clientIds(); track clientId) {
       <label class="checkbox">
         <input type="checkbox" [checked]="grants().includes(clientId)"
@@ -24,7 +33,7 @@
       </label>
     }
     @if (openWriteTool()) {
-      <p class="warning">Write tool open to every client. Write tools should be granted explicitly.</p>
+      <p class="warning">Write tool: grant at least one client, or disable it.</p>
     }
   </fieldset>
 

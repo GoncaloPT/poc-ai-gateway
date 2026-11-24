@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,9 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class ToolRegistry {
+
+	/** MCP tool name rules (spec 2025-11-25). */
+	private static final Pattern PUBLIC_NAME = Pattern.compile("[A-Za-z0-9_.-]{1,128}");
 
 	private final AiGatewayProperties properties;
 
@@ -90,18 +94,19 @@ public class ToolRegistry {
 
 	/**
 	 * Applies the current tool list of an upstream. New tools are added as {@link ToolStatus#DISCOVERED} unless
-	 * seeded; changed definitions are taken over silently; tools no longer offered are removed.
+	 * seeded; changed definitions are taken over silently, except that an enabled tool which becomes a write tool
+	 * while open to every client is disabled; tools no longer offered are removed.
 	 *
 	 * @param upstreamId upstream id
 	 * @param upstreamTools tools returned by the upstream {@code tools/list}
 	 */
-	public void syncUpstream(String upstreamId, List<McpSchema.Tool> upstreamTools) {
+	public synchronized void syncUpstream(String upstreamId, List<McpSchema.Tool> upstreamTools) {
 		var seen = new HashSet<String>();
 		for (var definition : upstreamTools) {
 			var id = RegisteredTool.key(upstreamId, definition.name());
 			seen.add(id);
-			tools.compute(id, (key, existing) -> existing != null ? existing.withDefinition(definition)
-					: newTool(upstreamId, definition));
+			tools.compute(id, (key, existing) -> closeOpenWriteTool(
+					existing != null ? existing.withDefinition(definition) : newTool(upstreamId, definition)));
 		}
 		tools.values()
 			.removeIf(tool -> tool.upstreamId().equals(upstreamId) && !seen.contains(tool.id()));
@@ -109,22 +114,47 @@ public class ToolRegistry {
 	}
 
 	/**
-	 * Changes the exposure rules of a tool.
+	 * Changes the exposure rules and public name of a tool.
 	 *
 	 * @param toolId registry id ({@code <upstream>/<internalName>})
+	 * @param publicName new public name, {@code null} = keep the current one
 	 * @param status new status
-	 * @param clients granted clients, empty = every enabled client
+	 * @param clients granted clients, empty = every enabled client (read-only tools only)
 	 * @param description description override, {@code null} = upstream description
 	 * @return updated tool, empty if unknown
+	 * @throws InvalidToolRulesException if the public name is invalid or an enabled write tool has no grant
+	 * @throws PublicNameTakenException if another tool already uses the public name
 	 */
-	public Optional<RegisteredTool> updateTool(String toolId, ToolStatus status, List<String> clients,
-			String description) {
-		var updated = tools.computeIfPresent(toolId, (key, tool) -> tool.withRules(status, clients, description));
-		if (updated != null) {
-			log.info("Tool {} updated: status={} clients={}", toolId, status, clients);
-			eventPublisher.publishEvent(new RegistryChangedEvent());
+	public synchronized Optional<RegisteredTool> updateTool(String toolId, String publicName, ToolStatus status,
+			List<String> clients, String description) {
+		var current = tools.get(toolId);
+		if (current == null) {
+			return Optional.empty();
 		}
-		return Optional.ofNullable(updated);
+		var name = publicName != null ? publicName : current.publicName();
+		if (!PUBLIC_NAME.matcher(name).matches()) {
+			throw new InvalidToolRulesException(
+					"Public name must be 1-128 characters of A-Z, a-z, 0-9, '_', '-' or '.'");
+		}
+		findByPublicName(name).filter(owner -> !owner.id().equals(toolId)).ifPresent(owner -> {
+			throw new PublicNameTakenException(name, owner.id());
+		});
+		var updated = current.withRules(name, status, clients, description);
+		if (updated.isOpenWriteTool()) {
+			throw new InvalidToolRulesException("Write tools need at least one explicitly granted client");
+		}
+		tools.put(toolId, updated);
+		log.info("Tool {} updated: publicName={} status={} clients={}", toolId, name, status, clients);
+		eventPublisher.publishEvent(new RegistryChangedEvent());
+		return Optional.of(updated);
+	}
+
+	private RegisteredTool closeOpenWriteTool(RegisteredTool tool) {
+		if (!tool.isOpenWriteTool()) {
+			return tool;
+		}
+		log.warn("Tool {} is a write tool without an explicit grant, disabled until granted", tool.id());
+		return tool.withStatus(ToolStatus.DISABLED);
 	}
 
 	private RegisteredTool newTool(String upstreamId, McpSchema.Tool definition) {

@@ -28,7 +28,7 @@ AI client ──POST /mcp──►┌──────────────�
 |---|---|---|
 | `poc-mcp-tool-service` | Spring Boot 4.2, Spring AI 2.1 MCP server (stateless Streamable HTTP) | Sample microservice. One `TaskService` (in-memory store) exposed via a REST controller (`POST`/`GET`/`DELETE /api/tasks`) and via `@McpTool` methods (`create_task`, `list_tasks`, `delete_task`). |
 | `poc-car-brand-service` | Same stack as `poc-mcp-tool-service` | Second sample microservice, so the gateway merges tools of several upstreams. `CarBrandService` (in-memory, unique by name) via REST (`POST`/`GET /api/car-brands`, `DELETE /api/car-brands/{name}`) and `@McpTool` methods (`add_car_brand`, `list_car_brands`, `remove_car_brand`). Public names get the `cars_` prefix. |
-| `poc-ai-gateway-app` | Angular 22 (standalone, signals, zoneless) | Admin UI for the gateway's `/admin` API. **Tools**: filter by status/upstream/text, enable/disable, edit client grants and description override, review discovered tools. **Clients**: enable/disable, register new ones, see which tools each can use. Dev server proxies `/admin` to `:8080`. |
+| `poc-ai-gateway-app` | Angular 22 (standalone, signals, zoneless) | Admin UI for the gateway's `/admin` API. **Tools**: filter by status/upstream/text, enable/disable, edit public name, client grants and description override, review discovered tools. **Clients**: enable/disable, register new ones, see which tools each can use. Dev server proxies `/admin` to `:8080`. |
 | `poc-ai-gateway` | Spring Boot 4.2, Spring Cloud Gateway Server MVC 5.1 (Spring Cloud 2026.0), Spring AI 2.1 MCP server outward, MCP Java SDK 2.2 client inward | Single public `/mcp` endpoint. Aggregates the tools of all upstreams, decides which ones each AI client sees and may call, and audits every call. |
 
 ## Why Spring Cloud Gateway + MCP server + MCP client
@@ -65,8 +65,10 @@ loop.
   granted to `chat-assistant` only; the read tools `tasks_list_tasks` and `cars_list_car_brands` to every enabled
   client. `tools/list` is filtered per client, and calls of non-granted
   tools get the same "Unknown tool" error as non-existing tools.
-- **Renaming**: internal `create_task` becomes public `tasks_create_task` (`<domain>_<tool>`). The description can be
-  overridden; the input schema and hints are passed through unchanged.
+- **Write tools need an explicit grant**: a tool without `readOnlyHint=true` cannot be enabled for every client. The
+  admin API rejects it with `400`; a seeded or upstream-changed tool that breaks the rule starts or ends up `DISABLED`.
+- **Renaming**: internal `create_task` becomes public `tasks_create_task` (`<domain>_<tool>`). Admins can set another
+  public name (MCP name rules, unique, `409` if taken). The description can be overridden; the input schema and hints are passed through unchanged.
 - **Identity forwarding**: the inbound `Authorization` header and user id are forwarded to the upstream, so it can
   apply its own access checks.
 - **Kill switches**: `AI_GATEWAY_ENABLED=false` returns `503` for everything; per-tool status and per-client flag at
@@ -78,7 +80,7 @@ loop.
 - **No internals in errors**: Spring AI's MCP transport returns an `McpError` (an exception) as error body, which
   Jackson serializes with its stack trace. `McpErrorSanitizer`, the innermost route filter, turns it into a plain
   JSON-RPC error (code and message).
-- **Admin API**: `/admin/clients` and `/admin/tools` to list, enable, disable and grant at runtime.
+- **Admin API**: `/admin/clients` and `/admin/tools` to list, enable, disable, grant and rename at runtime.
 
 ## Run
 
@@ -160,6 +162,10 @@ curl -s localhost:8080/admin/tools
 # approve delete_task for chat-assistant only
 curl -s -X PUT localhost:8080/admin/tools/task-service/delete_task -H 'Content-Type: application/json' \
   -d '{"status":"ENABLED","clients":["chat-assistant"]}'
+
+# rename it (publicName optional, null keeps the current name)
+curl -s -X PUT localhost:8080/admin/tools/task-service/delete_task -H 'Content-Type: application/json' \
+  -d '{"publicName":"tasks_delete","status":"ENABLED","clients":["chat-assistant"]}'
 
 # disable a client: its next request gets 403
 curl -s -X PUT localhost:8080/admin/clients/chat-assistant -H 'Content-Type: application/json' -d '{"enabled":false}'

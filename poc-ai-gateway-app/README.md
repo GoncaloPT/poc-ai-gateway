@@ -3,8 +3,9 @@
 Admin UI for `poc-ai-gateway` (Angular 22, standalone components, signals, zoneless).
 
 - **Tools**: every tool the gateway knows, including discovered ones awaiting review. Filter by status, upstream or
-  text; enable/disable; edit client grants (none = every enabled client) and the description shown to AI clients.
-  Warns when a write tool is open to every client.
+  text; enable/disable; edit public name, client grants (none = every enabled client) and the description shown to
+  AI clients. Write tools need at least one granted client: "Enable" opens the editor for them, and the gateway rejects
+  an open write tool with `400`.
 - **Clients**: enable/disable AI clients (disabled = `403`), register new ones, see which tools each client can use.
 
 ## Run
